@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AG Real Estate — Кабінет ріелтора</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f5f6f8;color:#17181a;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.wrap{max-width:760px;margin:auto;padding:14px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+h1{font-size:23px;margin:0}.sub{color:#777;font-size:13px;margin-top:3px}
+.tabs{display:flex;gap:8px;margin-bottom:12px}.tab{flex:1;background:#e5e7eb}.tab.active{background:#111;color:#fff}
+.card{background:#fff;border-radius:16px;padding:14px;margin:10px 0}.title{font-weight:750;font-size:17px}.muted{color:#70757d;font-size:13px}.price{font-size:18px;font-weight:800;margin:7px 0}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}button{border:0;border-radius:11px;padding:10px 12px;font-weight:650;font-size:14px;background:#e7e9ed}button.primary{background:#111;color:#fff}
+select,input,textarea{width:100%;padding:10px;border:1px solid #ddd;border-radius:10px;background:#fff;font:inherit}textarea{min-height:90px;resize:vertical}
+label{display:block;font-size:13px;font-weight:650;margin:10px 0 5px}.empty{text-align:center;color:#777;padding:30px 5px}.err{color:#a00020}
+.stat{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}.stat div{background:#fff;border-radius:14px;padding:13px}.num{font-size:23px;font-weight:800}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:flex-end;justify-content:center;padding:0;z-index:20}.modal.open{display:flex}.sheet{background:#fff;width:100%;max-width:760px;max-height:92vh;overflow:auto;border-radius:20px 20px 0 0;padding:16px}.sheet h2{margin:0 0 8px;font-size:20px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.grid label{margin-top:4px}.actions{display:flex;gap:8px;margin-top:14px}.actions button{flex:1}.hint{font-size:12px;color:#777;margin-top:4px}
+label{display:block;font-size:13px;color:#555;margin:9px 0}input,textarea{width:100%;margin-top:6px;padding:11px;border:1px solid #ddd;border-radius:10px;font:inherit;background:#fff}.actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}.hint{color:#777;font-size:12px;margin-top:8px}.modal{position:fixed;inset:0;background:rgba(0,0,0,.42);display:none;align-items:flex-end;justify-content:center;padding:12px}.modal.open{display:flex}.sheet{width:min(760px,100%);background:#fff;border-radius:18px;padding:16px;max-height:90vh;overflow:auto}.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}@media(max-width:520px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div id="register" class="register" style="display:none">
+  <div class="card">
+    <h2>🤝 Реєстрація ріелтора</h2>
+    <div class="muted" style="margin-bottom:12px">Створіть профіль, щоб отримувати заявки та керувати своїми об'єктами.</div>
+    <label>Ваше ім'я<input id="r_name" maxlength="100" placeholder="Наприклад, Артем"></label>
+    <label>Номер телефону<input id="r_phone" type="tel" maxlength="40" placeholder="+380..." autocomplete="tel"></label>
+    <div class="actions"><button class="primary" onclick="registerAgent()">🚀 Зареєструватися</button></div>
+    <div id="regMsg" class="muted"></div>
+  </div>
+</div>
+<div class="top"><div><h1>AG Real Estate</h1><div class="sub">Кабінет ріелтора</div></div><button onclick="load()">↻ Оновити</button></div>
+<div id="stats" class="stat"></div>
+<div class="tabs"><button id="tp" class="tab active" onclick="show('properties')">🏠 Мої об'єкти</button><button id="tl" class="tab" onclick="show('leads')">📋 Мої заявки</button></div>
+<div id="addBar" style="margin-bottom:12px"><button class="primary" style="width:100%;font-size:16px;padding:13px" onclick="openCreate()">➕ Додати об'єкт</button></div>
+<div id="status" class="muted">Завантаження...</div><div id="list"></div>
+</div>
+
+<div id="createModal" class="modal" onclick="if(event.target===this)closeCreate()">
+  <div class="sheet">
+    <h2>➕ Новий об'єкт</h2>
+    <div class="hint">Заповніть основні дані. Після збереження об'єкт одразу з'явиться у вашому кабінеті.</div>
+    <label>Назва<input id="c_title" maxlength="200" placeholder="Наприклад, 3-кімнатна квартира"></label>
+    <div class="grid">
+      <label>Місто<input id="c_city" maxlength="100" placeholder="Харків"></label>
+      <label>Район<input id="c_district" maxlength="100" placeholder="Основ'янський"></label>
+      <label>Кімнати<input id="c_rooms" type="number" min="0" step="1" placeholder="3"></label>
+      <label>Площа, м²<input id="c_area" type="number" min="0" step="0.01" placeholder="70"></label>
+      <label>Ціна<input id="c_price" type="number" min="0" step="0.01" placeholder="74000"></label>
+      <label>Валюта<select id="c_currency"><option value="USD">USD</option><option value="UAH">UAH</option><option value="EUR">EUR</option></select></label>
+    </div>
+    <label>Статус<select id="c_status"><option value="for_sale">Продається</option><option value="for_rent">Доступний для оренди</option><option value="sold">Продано</option><option value="rented">Здано</option><option value="archived">Архів</option></select></label>
+    <label>Опис<textarea id="c_description" maxlength="5000" placeholder="Опишіть об'єкт..."></textarea></label>
+    <div class="grid">
+      <label>Широта<input id="c_latitude" type="number" step="any" min="-90" max="90" placeholder="49.9935"></label>
+      <label>Довгота<input id="c_longitude" type="number" step="any" min="-180" max="180" placeholder="36.2304"></label>
+    </div>
+    <div class="hint">Фото та вибір точки на карті підключимо наступним кроком.</div>
+    <div id="createMsg" class="hint"></div>
+    <div class="actions"><button onclick="closeCreate()">Скасувати</button><button class="primary" onclick="createProperty()">💾 Створити об'єкт</button></div>
+  </div>
+</div>
+
+<div id="modal" class="modal" onclick="if(event.target===this)closeEditor()">
+  <div class="sheet">
+    <h2>✏️ Редагувати об'єкт</h2>
+    <div id="editHint" class="hint"></div>
+    <input type="hidden" id="f_id">
+    <label>Назва<input id="f_title" maxlength="200"></label>
+    <div class="grid">
+      <label>Місто<input id="f_city" maxlength="100"></label>
+      <label>Район<input id="f_district" maxlength="100"></label>
+      <label>Кімнати<input id="f_rooms" type="number" min="0" step="1"></label>
+      <label>Площа, м²<input id="f_area" type="number" min="0" step="0.01"></label>
+      <label>Ціна<input id="f_price" type="number" min="0" step="0.01"></label>
+      <label>Валюта<select id="f_currency"><option value="USD">USD</option><option value="UAH">UAH</option><option value="EUR">EUR</option></select></label>
+    </div>
+    <label>Статус<select id="f_status"><option value="for_sale">Продається</option><option value="for_rent">Доступний для оренди</option><option value="sold">Продано</option><option value="rented">Здано</option><option value="archived">Архів</option></select></label>
+    <label>Опис<textarea id="f_description" maxlength="5000"></textarea></label>
+    <div class="grid">
+      <label>Широта<input id="f_latitude" type="number" step="any" min="-90" max="90"></label>
+      <label>Довгота<input id="f_longitude" type="number" step="any" min="-180" max="180"></label>
+    </div>
+    <div class="hint">Координати можна ввести вручну. Вибір точки на карті додамо окремо.</div>
+    <div class="actions"><button onclick="closeEditor()">Скасувати</button><button class="primary" onclick="saveProperty()">💾 Зберегти</button></div>
+  </div>
+</div>
+
+<script>
+const API="https://xrpggdiyebwejhxfdmwe.supabase.co/functions/v1/agent-portal";
+const REGISTER_API="https://xrpggdiyebwejhxfdmwe.supabase.co/functions/v1/agent-register";
+const tg=window.Telegram?.WebApp; if(tg){tg.ready();tg.expand();}
+const uid=tg?.initDataUnsafe?.user?.id || prompt("Введіть Telegram ID ріелтора");
+let state={properties:[],leads:[],agent:null}, section="properties";
+const $=x=>document.getElementById(x);
+function show(s){section=s;$("tp").classList.toggle("active",s==="properties");$("tl").classList.toggle("active",s==="leads");$("addBar").style.display=s==="properties"?"block":"none";render()}
+function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]))}
+function money(v,c){return v==null?"—":Number(v).toLocaleString("uk-UA")+" "+(c||"USD")}
+function render(){const p=state.properties,l=state.leads;$("stats").innerHTML=`<div><div class="muted">Об'єкти</div><div class="num">${p.length}</div></div><div><div class="muted">Заявки</div><div class="num">${l.length}</div></div>`;if(section==="properties"){if(!p.length){$("list").innerHTML="<div class=\"empty\">Об'єктів поки немає.</div>";return}$("list").innerHTML=p.map(x=>`<div class="card"><div class="title">#${x.id} ${esc(x.title)}</div><div class="muted">📍 ${esc([x.city,x.district].filter(Boolean).join(", "))}</div><div>${x.rooms||"—"} кімн. • ${x.area||"—"} м²</div><div class="price">${money(x.price,x.currency)}</div><div class="muted">Статус: ${esc(status(x.status))}</div><div class="row"><button class="primary" onclick="openEditor(${x.id})">✏️ Редагувати</button><select style="flex:1;min-width:180px" onchange="updateProperty(${x.id},this.value)"><option value="">Змінити статус</option><option value="for_sale">Продається</option><option value="for_rent">Доступний для оренди</option><option value="sold">Продано</option><option value="rented">Здано</option><option value="archived">Архів</option></select></div></div>`).join("")}else{if(!l.length){$("list").innerHTML="<div class=\"empty\">Заявок поки немає.</div>";return}$("list").innerHTML=l.map(x=>`<div class="card"><div class="title">👤 ${esc(x.name||"Без імені")}</div><div>📞 ${esc(x.phone||"—")}</div><div class="muted">🏠 Об'єкт №${x.property_id||"—"} • ${esc(x.lead_type||"звернення")}</div><div style="margin-top:6px">${esc(x.message||"")}</div><div class="row"><select onchange="updateLead(${x.id},this.value)"><option value="">${esc(status(x.status))}</option><option value="new">Нова</option><option value="contacted">Зв'язалися</option><option value="viewing">Перегляд</option><option value="deal">Угода</option><option value="rejected">Відмова</option></select></div></div>`).join("")}}
+function status(s){return ({for_sale:"Продається",for_rent:"Доступний для оренди",sold:"Продано",rented:"Здано",archived:"Архів",new:"Нова",contacted:"Зв'язалися",viewing:"Перегляд",deal:"Угода",rejected:"Відмова"})[s]||s||"—"}
+async function api(body={},method="GET"){let url=API;if(method==="GET")url+="?telegram_user_id="+encodeURIComponent(uid);let r=await fetch(url,{method,headers:{"Content-Type":"application/json"},body:method==="GET"?undefined:JSON.stringify({...body,telegram_user_id:uid})});let j=await r.json();if(!r.ok)throw Error(j.error||"Помилка");return j}
+async function load(){try{$("status").textContent="Завантаження...";state=await api();if(state.registered===false){showRegistration();return}$('register').style.display='none';$('status').textContent=state.agent?.name?`Вітаємо, ${state.agent.name}!`:"Готово";render()}catch(e){if(String(e.message||e).includes("agent_not_found")){showRegistration();return}$('status').innerHTML='<span class="err">Не вдалося завантажити кабінет.</span>';console.error(e)}}
+function showRegistration(){$('register').style.display='block';$('stats').innerHTML='';$('list').innerHTML='';$('status').textContent='Новий ріелтор';}
+async function registerAgent(){const name=$('r_name').value.trim(),phone=$('r_phone').value.trim();if(name.length<2){alert("Вкажіть ім'я");return}if(phone.length<5){alert('Вкажіть номер телефону');return}$('regMsg').textContent='Реєстрація...';try{const username=tg?.initDataUnsafe?.user?.username||null;const r=await fetch(REGISTER_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({telegram_user_id:uid,name,phone,username})});const j=await r.json();if(!r.ok)throw Error(j.error||'Помилка реєстрації');$('regMsg').textContent='✅ Реєстрацію завершено. Завантажуємо кабінет...';await load()}catch(e){console.error(e);$('regMsg').textContent='❌ Не вдалося зареєструватися. Спробуйте ще раз.'}}
+function openCreate(){
+  ['c_title','c_city','c_district','c_rooms','c_area','c_price','c_description','c_latitude','c_longitude'].forEach(id=>$(id).value='');
+  $('c_currency').value='USD';$('c_status').value='for_sale';$('createMsg').textContent='';$('createModal').classList.add('open');
+}
+function closeCreate(){$('createModal').classList.remove('open')}
+async function createProperty(){
+  const title=$('c_title').value.trim();
+  if(title.length<2){alert("Вкажіть назву об'єкта");return}
+  const payload={action:'create_property',title,city:$('c_city').value.trim(),district:$('c_district').value.trim(),rooms:numOrNull($('c_rooms').value),area:numOrNull($('c_area').value),price:numOrNull($('c_price').value),currency:$('c_currency').value,status:$('c_status').value,description:$('c_description').value.trim(),latitude:numOrNull($('c_latitude').value),longitude:numOrNull($('c_longitude').value),photo_urls:[]};
+  $("createMsg").textContent="Створюємо об'єкт...";
+  try{const r=await api(payload,'POST');closeCreate();await load();show('properties');alert("✅ Об'єкт створено")}catch(e){console.error(e);$("createMsg").textContent="❌ Не вдалося створити об'єкт: "+(e.message||"помилка")}}
+function openEditor(id){const x=state.properties.find(p=>Number(p.id)===Number(id));if(!x)return;$("f_id").value=x.id;$("f_title").value=x.title||"";$("f_city").value=x.city||"";$("f_district").value=x.district||"";$("f_rooms").value=x.rooms??"";$("f_area").value=x.area??"";$("f_price").value=x.price??"";$("f_currency").value=x.currency||"USD";$("f_status").value=x.status||"for_sale";$("f_description").value=x.description||"";$("f_latitude").value=x.latitude??"";$("f_longitude").value=x.longitude??"";$("editHint").textContent=`Об'єкт №${x.id}`;$("modal").classList.add("open")}
+function closeEditor(){$("modal").classList.remove("open")}
+async function saveProperty(){const id=Number($("f_id").value);const title=$("f_title").value.trim();if(!title){alert("Вкажіть назву об'єкта");return}const payload={action:"update_property",id,title,city:$("f_city").value.trim(),district:$("f_district").value.trim(),rooms:numOrNull($("f_rooms").value),area:numOrNull($("f_area").value),price:numOrNull($("f_price").value),currency:$("f_currency").value,status:$("f_status").value,description:$("f_description").value.trim(),latitude:numOrNull($("f_latitude").value),longitude:numOrNull($("f_longitude").value)};try{await api(payload,"POST");closeEditor();await load();alert("Об'єкт збережено")}catch(e){console.error(e);alert("Не вдалося зберегти об'єкт")}}
+function numOrNull(v){if(v===null||v===undefined||String(v).trim()==="")return null;const n=Number(v);return Number.isFinite(n)?n:null}
+async function updateProperty(id,status){if(!status)return;try{await api({action:"update_property",id,status},"POST");await load()}catch(e){alert("Не вдалося змінити статус")}}
+async function updateLead(id,status){if(!status)return;try{await api({action:"update_lead",id,status},"POST");await load()}catch(e){alert("Не вдалося змінити статус заявки")}}
+load();
+</script>
+</body></html>
