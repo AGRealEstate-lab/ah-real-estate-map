@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>AG Real Estate</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f5f6f8;color:#17181a}
+    .wrap{max-width:760px;margin:auto;padding:14px}
+    h1{font-size:24px;margin:6px 0 2px}
+    .sub{color:#70757d;font-size:14px;margin-bottom:16px}
+    .tabs{display:flex;gap:8px;margin-bottom:12px}
+    button{border:0;border-radius:12px;padding:12px 14px;font-size:15px;font-weight:600;cursor:pointer}
+    .tab{flex:1;background:#e6e8ec;color:#333}
+    .tab.active{background:#111;color:#fff}
+    .filters{background:#fff;border-radius:16px;padding:12px;margin-bottom:14px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+    input{width:100%;padding:12px;border:1px solid #d9dce1;border-radius:11px;font-size:15px;background:#fff}
+    .wide{grid-column:1/-1}
+    .search{width:100%;background:#111;color:#fff;margin-top:10px}
+    #status{font-size:14px;color:#70757d;margin:12px 2px}
+    .card{background:#fff;border-radius:16px;overflow:hidden;margin:12px 0;box-shadow:0 2px 10px #0000000d}
+    .photo{width:100%;height:210px;object-fit:cover;background:#e8eaee;display:block}
+    .body{padding:13px}
+    .title{font-size:18px;font-weight:700;margin-bottom:6px}
+    .loc{color:#686d75;font-size:14px;margin-bottom:8px}
+    .meta{font-size:14px;margin-bottom:8px}
+    .price{font-size:20px;font-weight:800;margin:8px 0 12px}
+    .actions{display:flex;gap:8px}
+    .ask{flex:1;background:#111;color:#fff}
+    .view{flex:1;background:#e9ebef;color:#111}
+    .empty{text-align:center;padding:35px 10px;color:#777}
+    .modal{position:fixed;inset:0;background:#0008;display:none;align-items:flex-end;justify-content:center}
+    .modal.show{display:flex}
+    .sheet{width:100%;max-width:760px;background:#fff;border-radius:22px 22px 0 0;padding:18px}
+    .sheet h2{margin:0 0 14px;font-size:20px}
+    .sheet input,.sheet textarea{margin-bottom:9px}
+    textarea{resize:vertical;min-height:80px;font-family:inherit}
+    .send{width:100%;background:#111;color:#fff}
+    .cancel{width:100%;background:#e9ebef;margin-top:8px}
+    .error{color:#b00020}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>AG Real Estate</h1>
+  <div class="sub">Пошук нерухомості</div>
+
+  <div class="tabs">
+    <button class="tab active" data-mode="sale">🏠 Купити</button>
+    <button class="tab" data-mode="rent">🏢 Орендувати</button>
+  </div>
+
+  <div class="filters">
+    <div class="grid">
+      <input id="city" class="wide" placeholder="Місто">
+      <input id="rooms" type="number" min="1" placeholder="Кімнат">
+      <input id="maxPrice" type="number" min="0" placeholder="Макс. ціна, USD">
+      <input id="minArea" type="number" min="0" placeholder="Площа від, м²">
+    </div>
+    <button id="search" class="search">🔎 Знайти</button>
+  </div>
+
+  <div id="status">Завантаження...</div>
+  <div id="list"></div>
+</div>
+
+<div id="modal" class="modal">
+  <div class="sheet">
+    <h2 id="modalTitle">Залишити заявку</h2>
+    <input id="name" placeholder="Ваше ім'я">
+    <input id="phone" type="tel" placeholder="Телефон">
+    <textarea id="message" placeholder="Повідомлення (необов'язково)"></textarea>
+    <button id="send" class="send">📩 Надіслати заявку</button>
+    <button id="cancel" class="cancel">Скасувати</button>
+  </div>
+</div>
+
+<script>
+const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+if (tg) { tg.ready(); tg.expand(); }
+
+const API = "https://xrpggdiyebwejhxfdmwe.supabase.co/functions/v1/client-catalog";
+let mode = "sale";
+let selectedProperty = null;
+
+const $ = id => document.getElementById(id);
+
+document.querySelectorAll(".tab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+    btn.classList.add("active");
+    mode = btn.dataset.mode;
+    loadProperties();
+  });
+});
+
+$("search").addEventListener("click", loadProperties);
+
+function esc(v) {
+  return String(v ?? "").replace(/[&<>"']/g, c => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+  }[c]));
+}
+
+function formatPrice(p, currency) {
+  if (p === null || p === undefined || p === "") return "Ціна за запитом";
+  const n = Number(p);
+  return Number.isFinite(n)
+    ? new Intl.NumberFormat("uk-UA").format(n) + " " + (currency || "USD")
+    : esc(p);
+}
+
+function firstPhoto(p) {
+  if (Array.isArray(p.photo_urls) && p.photo_urls.length) return p.photo_urls[0];
+  if (typeof p.photo_urls === "string" && p.photo_urls.trim()) {
+    try {
+      const a = JSON.parse(p.photo_urls);
+      if (Array.isArray(a) && a.length) return a[0];
+    } catch(e) {}
+  }
+  return "";
+}
+
+async function loadProperties() {
+  $("status").textContent = "Завантаження...";
+  $("list").innerHTML = "";
+  const params = new URLSearchParams();
+  params.set("mode", mode);
+
+  const city = $("city").value.trim();
+  const rooms = $("rooms").value;
+  const maxPrice = $("maxPrice").value;
+  const minArea = $("minArea").value;
+
+  if (city) params.set("city", city);
+  if (rooms) params.set("rooms", rooms);
+  if (maxPrice) params.set("maxPrice", maxPrice);
+  if (minArea) params.set("minArea", minArea);
+
+  try {
+    const res = await fetch(API + "?" + params.toString(), {
+      headers: { "Accept": "application/json" }
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error((data && data.error) || "Помилка сервера");
+
+    const properties = Array.isArray(data) ? data : (data.properties || data.items || []);
+    render(properties);
+  } catch (e) {
+    $("status").innerHTML = '<span class="error">Не вдалося завантажити оголошення. Спробуйте ще раз.</span>';
+    console.error(e);
+  }
+}
+
+function render(properties) {
+  if (!properties.length) {
+    $("status").textContent = "Нічого не знайдено";
+    $("list").innerHTML = '<div class="empty">За цими параметрами оголошень поки немає.</div>';
+    return;
+  }
+
+  $("status").textContent = "Знайдено: " + properties.length;
+  $("list").innerHTML = properties.map(p => {
+    const photo = firstPhoto(p);
+    return `
+      <article class="card">
+        ${photo ? `<img class="photo" src="${esc(photo)}" alt="">` : `<div class="photo"></div>`}
+        <div class="body">
+          <div class="title">${esc(p.title || "Нерухомість")}</div>
+          <div class="loc">📍 ${esc([p.city, p.district].filter(Boolean).join(", ") || "Локацію не вказано")}</div>
+          <div class="meta">${p.rooms ? "🛏 " + esc(p.rooms) + " кімн.  " : ""}${p.area ? "📐 " + esc(p.area) + " м²" : ""}</div>
+          <div class="price">${formatPrice(p.price, p.currency)}</div>
+          <div class="actions">
+            <button class="ask" onclick="openLead('${esc(p.id)}','${esc(p.title || "Нерухомість")}')">💬 Запитати</button>
+            <button class="view" onclick="openLead('${esc(p.id)}','${esc(p.title || "Нерухомість")}','Перегляд')">📞 Хочу перегляд</button>
+          </div>
+        </div>
+      </article>`;
+  }).join("");
+}
+
+function openLead(id, title, kind) {
+  selectedProperty = { id, title, kind: kind || "Запит" };
+  $("modalTitle").textContent = kind === "Перегляд" ? "Замовити перегляд" : "Запит щодо об'єкта";
+  $("message").value = kind === "Перегляд" ? "Хочу домовитися про перегляд." : "";
+  $("modal").classList.add("show");
+}
+
+$("cancel").addEventListener("click", () => $("modal").classList.remove("show"));
+
+$("send").addEventListener("click", async () => {
+  const name = $("name").value.trim();
+  const phone = $("phone").value.trim();
+  const message = $("message").value.trim();
+
+  if (!name || !phone) {
+    alert("Будь ласка, вкажіть ім'я та телефон.");
+    return;
+  }
+
+  $("send").disabled = true;
+  $("send").textContent = "Надсилання...";
+
+  try {
+    const payload = {
+      property_id: selectedProperty.id,
+      lead_type: selectedProperty.kind,
+      name,
+      phone,
+      message,
+      telegram_user_id: tg?.initDataUnsafe?.user?.id || null,
+      username: tg?.initDataUnsafe?.user?.username || null,
+      initData: tg?.initData || ""
+    };
+
+    const res = await fetch(API, {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error((data && data.error) || "Не вдалося надіслати заявку");
+
+    $("modal").classList.remove("show");
+    $("name").value = "";
+    $("phone").value = "";
+    $("message").value = "";
+    alert("Дякуємо! Заявку надіслано.");
+  } catch (e) {
+    alert("Не вдалося надіслати заявку. Спробуйте ще раз.");
+    console.error(e);
+  } finally {
+    $("send").disabled = false;
+    $("send").textContent = "📩 Надіслати заявку";
+  }
+});
+
+loadProperties();
+</script>
+</body>
+</html>
