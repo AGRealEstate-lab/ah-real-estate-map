@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>AG Real Estate — карта</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+html,body,#map{height:100%;width:100%;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;overflow:hidden}
+.bar{position:fixed;z-index:1000;left:12px;right:12px;top:12px;background:rgba(255,255,255,.96);border-radius:16px;padding:12px;box-shadow:0 3px 18px rgba(0,0,0,.22)}
+.title{font-weight:700;font-size:17px;margin-bottom:8px}
+.hint{font-size:13px;color:#666;margin-top:7px;line-height:1.3}
+.search{width:100%;box-sizing:border-box;border:1px solid #d7d7d7;border-radius:11px;padding:11px;font-size:16px;outline:none}
+.btn{position:fixed;z-index:1000;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));border:0;border-radius:16px;padding:16px;background:#2481cc;color:#fff;font-size:17px;font-weight:700;box-shadow:0 3px 18px rgba(0,0,0,.25)}
+.status{position:fixed;z-index:1000;left:12px;right:12px;bottom:78px;text-align:center;font-size:13px;color:#555;background:rgba(255,255,255,.9);border-radius:10px;padding:7px;display:none}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="bar">
+  <div class="title">📍 Оберіть точку об’єкта</div>
+  <input id="q" class="search" placeholder="Місто або вулиця" autocomplete="off">
+  <div class="hint">Знайдіть адресу, потім натисніть на карті в потрібному місці. Маркер можна перетягувати.</div>
+</div>
+<div id="status" class="status"></div>
+<button id="save" class="btn">✅ Зберегти точку</button>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script>
+(function(){
+  const tg=window.Telegram&&window.Telegram.WebApp;
+  if(tg){tg.ready();tg.expand();}
+
+  const map=L.map('map').setView([50.4501,30.5234],12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    maxZoom:19,
+    attribution:'© OpenStreetMap contributors'
+  }).addTo(map);
+
+  let marker=null;
+
+  function setPoint(lat,lng){
+    if(marker) marker.setLatLng([lat,lng]);
+    else marker=L.marker([lat,lng],{draggable:true}).addTo(map);
+    const s=document.getElementById('status');
+    s.textContent='📍 Точку обрано';
+    s.style.display='block';
+  }
+
+  map.on('click',e=>setPoint(e.latlng.lat,e.latlng.lng));
+
+  document.getElementById('q').addEventListener('keydown',async e=>{
+    if(e.key!=='Enter') return;
+    const q=e.target.value.trim();
+    if(!q) return;
+    try{
+      const r=await fetch(
+        'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&accept-language=ru&q='+
+        encodeURIComponent(q),
+        {headers:{'Accept':'application/json'}}
+      );
+      const a=await r.json();
+      if(a[0]){
+        const lat=Number(a[0].lat),lng=Number(a[0].lon);
+        map.setView([lat,lng],17);
+        setPoint(lat,lng);
+      }else if(tg) tg.showAlert('Адресу не знайдено');
+    }catch(err){
+      if(tg) tg.showAlert('Не вдалося знайти адресу');
+    }
+  });
+
+  document.getElementById('save').onclick=()=>{
+    if(!marker){
+      if(tg) tg.showAlert('Спочатку оберіть точку на карті');
+      return;
+    }
+    const p=marker.getLatLng();
+    if(tg){
+      if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+      tg.sendData(JSON.stringify({lat:p.lat,lng:p.lng}));
+      tg.close();
+    }
+  };
+})();
+</script>
+</body>
+</html>
